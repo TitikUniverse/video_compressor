@@ -97,9 +97,9 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    if (a.filesize! < 1024 * 1024 * 30){
+    if (a.filesize! < 1024 * 1024 * 10){
       setState(() {
-        _tips = "视频小于30MB无需压缩";
+        _tips = "视频小于10MB无需压缩";
       });
       return;
     }
