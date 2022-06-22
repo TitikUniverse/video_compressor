@@ -48,10 +48,10 @@
 	    <string>_dartobservatory._tcp</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>“多鱼”想使用您的相册。分享圈子，集市，用户头像。</string>
+	<string>Please accept</string>
 	<key>NSCameraUsageDescription</key>
-    <string>“多鱼”想使用您的摄像头。如不允许，您将无法录制视频帖子或拍摄图文帖子照片。</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>“多鱼”想使用您的麦克风。如不允许，您将无法录制视频帖子或语音消息。</string>
+  <string>Please accept</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Please accept</string>
 </dict>
 </plist>
