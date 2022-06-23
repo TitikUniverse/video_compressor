@@ -9,9 +9,9 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 A new flutter plugin project.
                        DESC
-  s.homepage         = 'https://github.com/jonataslaw/video_compress'
+  s.homepage         = 'https://dstk.online'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Jonny Borges' => 'jonataborges01@gmail.com' }
+  s.author           = { 'DSTKCA' => 'dstkdevhrp' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.public_header_files = 'Classes/**/*.h'
