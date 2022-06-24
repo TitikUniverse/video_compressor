@@ -2,6 +2,9 @@ package com.dstk.video_compressor
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.app.Activity
 import android.util.Log
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
@@ -18,7 +21,11 @@ import com.otaliastudios.transcoder.internal.Logger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry.Registrar
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -27,19 +34,26 @@ import java.util.concurrent.Future
 /**
  * VideoCompressorPlugin
  */
-class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin {
+class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin, EventChannel.StreamHandler, ActivityAware{
 
+    companion object {
+        const val CHANNEL = "video_compress"
+        const val STREAM = "video_compress/stream"
+    }
+
+    private lateinit var _methodChannel: MethodChannel
+    private lateinit var _eventChannel: EventChannel
+    private var _eventSink: EventChannel.EventSink? = null
+    private lateinit var _activity: Activity
 
     private var _context: Context? = null
-    private var _channel: MethodChannel? = null
     private val TAG = "VideoCompressorPlugin"
     private val LOG = Logger(TAG)
-    private var transcodeFuture:Future<Void>? = null
-    var channelName = "video_compress"
+    private var transcodeFuture: Future<Void>? = null
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         val context = _context;
-        val channel = _channel;
+        val channel = _methodChannel;
 
         if (context == null || channel == null) {
             Log.w(TAG, "Calling VideoCompress plugin before initialization")
@@ -51,7 +65,7 @@ class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin {
                 val path = call.argument<String>("path")
                 val quality = call.argument<Int>("quality")!!
                 val position = call.argument<Int>("position")!! // to long
-                ThumbnailUtility(channelName).getByteThumbnail(path!!, quality, position.toLong(), result)
+                ThumbnailUtility(CHANNEL).getByteThumbnail(path!!, quality, position.toLong(), result)
             }
             "getFileThumbnail" -> {
                 val path = call.argument<String>("path")
@@ -62,10 +76,10 @@ class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin {
             }
             "getMediaInfo" -> {
                 val path = call.argument<String>("path")
-                result.success(Utility(channelName).getMediaInfoJson(context, path!!).toString())
+                result.success(Utility(CHANNEL).getMediaInfoJson(context, path!!).toString())
             }
             "deleteAllCache" -> {
-                result.success(Utility(channelName).deleteAllCache(context, result));
+                result.success(Utility(CHANNEL).deleteAllCache(context, result));
             }
             "setLogLevel" -> {
                 val logLevel = call.argument<Int>("logLevel")!!
@@ -163,11 +177,18 @@ class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin {
                         .setVideoTrackStrategy(videoTrackStrategy)
                         .setListener(object : TranscoderListener {
                             override fun onTranscodeProgress(progress: Double) {
-                                channel.invokeMethod("updateProgress", progress * 100.00)
+//                                channel.invokeMethod("updateProgress", progress * 100.00)
+                                Handler(Looper.getMainLooper()).post {
+                                    _eventSink?.success(progress * 100.00)
+                                }
                             }
                             override fun onTranscodeCompleted(successCode: Int) {
-                                channel.invokeMethod("updateProgress", 100.00)
-                                val json = Utility(channelName).getMediaInfoJson(context, destPath)
+
+                                Handler(Looper.getMainLooper()).post {
+                                    _eventSink?.success(100.00)
+                                }
+//                                channel.invokeMethod("updateProgress", 100.00)
+                                val json = Utility(CHANNEL).getMediaInfoJson(context, destPath)
                                 json.put("isCancel", false)
                                 result.success(json.toString())
                                 if (deleteOrigin) {
@@ -195,26 +216,50 @@ class VideoCompressorPlugin : MethodCallHandler, FlutterPlugin {
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        _channel?.setMethodCallHandler(null)
         _context = null
-        _channel = null
+        _methodChannel?.setMethodCallHandler(null)
+        _eventChannel?.setStreamHandler(null)
     }
 
     private fun init(context: Context, messenger: BinaryMessenger) {
-        val channel = MethodChannel(messenger, channelName)
-        channel.setMethodCallHandler(this)
+
         _context = context
-        _channel = channel
+
+        val mChannel = MethodChannel(messenger, CHANNEL)
+        mChannel.setMethodCallHandler(this)
+        _methodChannel = mChannel
+
+        val eChannel = EventChannel(messenger, STREAM)
+        eChannel.setStreamHandler(this)
+        _eventChannel = eChannel
     }
 
-    companion object {
-        private const val TAG = "video_compress"
-
-        @JvmStatic
-        fun registerWith(registrar: Registrar) {
-            val instance = VideoCompressorPlugin()
-            instance.init(registrar.context(), registrar.messenger())
-        }
+    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        _eventSink = events
     }
+
+    override fun onCancel(arguments: Any?) {
+        _eventSink = null
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        this._activity = binding.activity
+    }
+    override fun onDetachedFromActivity() {}
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        this._activity = binding.activity
+    }
+    override fun onDetachedFromActivityForConfigChanges() {}
+
+//    companion object {
+//        private const val TAG = "video_compress"
+//
+//        @JvmStatic
+//        fun registerWith(registrar: Registrar) {
+//            val instance = VideoCompressorPlugin()
+//            instance.init(registrar.context(), registrar.messenger())
+//        }
+//    }
 
 }

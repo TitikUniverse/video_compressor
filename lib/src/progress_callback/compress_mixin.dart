@@ -6,10 +6,10 @@ class CompressMixin {
   final compressProgress$ = ObservableBuilder<double>();
   final _channel = const MethodChannel('video_compress');
 
-  @protected
-  void initProcessCallback() {
-    _channel.setMethodCallHandler(_progressCallback);
-  }
+  // @protected
+  // void initProcessCallback() {
+  //   _channel.setMethodCallHandler(_progressCallback);
+  // }
 
   MethodChannel get channel => _channel;
 
@@ -22,18 +22,18 @@ class CompressMixin {
     _isCompressing = status;
   }
 
-  Future<void> _progressCallback(MethodCall call) async {
-    switch (call.method) {
-      case 'updateProgress':
-        final progress = double.tryParse(call.arguments.toString());
-        if (progress != null) compressProgress$.next(progress);
-        break;
-    }
-  }
+  // Future<void> _progressCallback(MethodCall call) async {
+  //   switch (call.method) {
+  //     case 'updateProgress':
+  //       final progress = double.tryParse(call.arguments.toString());
+  //       if (progress != null) compressProgress$.next(progress);
+  //       break;
+  //   }
+  // }
 
   /// A stream to listen to video compression progress
   static const EventChannel _progressStream =
-  EventChannel('compression/stream');
+  EventChannel('video_compress/stream');
 
   Stream<double>? _onProgressUpdated;
 

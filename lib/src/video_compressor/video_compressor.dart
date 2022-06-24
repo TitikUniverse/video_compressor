@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import '../progress_callback/compress_mixin.dart';
 import '../video_compressor/video_quality.dart';
-import 'compression_result.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../media/media_info.dart';
@@ -13,7 +12,7 @@ abstract class IVideoCompressor extends CompressMixin {}
 
 class _VideoCompressorImpl extends IVideoCompressor {
   _VideoCompressorImpl._() {
-    initProcessCallback();
+    // initProcessCallback();
   }
 
   static _VideoCompressorImpl? _instance;
