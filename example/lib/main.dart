@@ -96,7 +96,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (conf.isCompressionNeeded){
       await VideoCompressor.setLogLevel(0);
-      final Stopwatch stopwatch = Stopwatch()..start();
+      // final Stopwatch stopwatch = Stopwatch()..start();
       final MediaInfo? info = await VideoCompressor.compressVideo(
       // final dynamic response = await VideoCompressor.compressVideo(
         file.path,
@@ -105,12 +105,12 @@ class _MyHomePageState extends State<MyHomePage> {
         height: conf.targetHeight,
         bps: conf.targetBps,
       );
-      print(info!.path);
+      // print(info!.path);
 
-      stopwatch.stop();
-      final Duration duration =
-      Duration(milliseconds: stopwatch.elapsedMilliseconds);
-      _duration = duration.inSeconds;
+      // stopwatch.stop();
+      // final Duration duration =
+      // Duration(milliseconds: stopwatch.elapsedMilliseconds);
+      // _duration = duration.inSeconds;
 
       if (info != null) {
         setState(() {
@@ -131,12 +131,14 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   _reload(){
-    _duration = 0;
-    _compRate = 0;
-    _sizeChange = "";
-    _name = "";
-    _compressedFile = "";
-    _tips = "";
+    setState(() {
+      _duration = 0;
+      _compRate = 0;
+      _sizeChange = "";
+      _name = "";
+      _compressedFile = "";
+      _tips = "";
+    });
   }
 
   @override

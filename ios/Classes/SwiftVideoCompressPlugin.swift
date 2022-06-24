@@ -3,7 +3,7 @@ import AVFoundation
 import UIKit
 import Photos
 
-public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
+public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private var eventSink: FlutterEventSink?
     private let channelName = "video_compress"
@@ -20,6 +20,19 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
         let channel = FlutterMethodChannel(name: "video_compress", binaryMessenger: registrar.messenger())
         let instance = SwiftVideoCompressorPlugin(channel: channel)
         registrar.addMethodCallDelegate(instance, channel: channel)
+        
+        let eventChannel = FlutterEventChannel(name: "video_compress/stream", binaryMessenger: registrar.messenger())
+        eventChannel.setStreamHandler(instance.self)
+    }
+    
+    public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        eventSink = events
+        return nil
+    }
+    
+    public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -35,9 +48,9 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
             let quality = args!["quality"] as! NSNumber
             let position = args!["position"] as! NSNumber
             getFileThumbnail(path, quality, position, result)
-        case "getMediaInfo":
-            let path = args!["path"] as! String
-            getMediaInfo(path, result)
+//        case "getMediaInfo":
+//            let path = args!["path"] as! String
+//            getMediaInfo(path, result)
         case "compressVideo":
             let path = args!["path"] as! String
             let quality = args!["quality"] as! NSNumber
@@ -74,7 +87,7 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
                           }
                       }
                   },
-//                  completion: { compressionResult in
+//                  { compressionResult in
 //                      switch compressionResult {
 //                          case .onSuccess(let path):
 //                              if(saveInGallery!) {
@@ -150,7 +163,22 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
     public func getMediaInfoJson(_ path: String)->[String : Any?] {
         let url = Utility.getPathUrl(path)
         let asset = avController.getVideoAsset(url)
-        guard let track = avController.getTrack(asset) else { return [:] }
+//        guard let track = avController.getTrack(asset) else { return [:] }
+//        let track = asset.tracks(withMediaType: AVMediaType.video).first!
+        
+        var track : AVAssetTrack? = nil
+        let group = DispatchGroup()
+        group.enter()
+        asset.loadValuesAsynchronously(forKeys: ["tracks"], completionHandler: {
+            var error: NSError? = nil;
+            let status = asset.statusOfValue(forKey: "tracks", error: &error)
+            if (status == .loaded) {
+                track = asset.tracks(withMediaType: AVMediaType.video).first
+            }
+            group.leave()
+        })
+        group.wait()
+//        guard let track = asset.tracks(withMediaType: .video).first else { fatalError() }
         
         let playerItem = AVPlayerItem(url: url)
         let metadataAsset = playerItem.asset
@@ -161,13 +189,13 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
         let author = avController.getMetaDataByTag(metadataAsset,key: "author")
         
         let duration = asset.duration.seconds * 1000
-        let filesize = track.totalSampleDataLength
+        let filesize = track?.totalSampleDataLength
         
-        let size = track.naturalSize.applying(track.preferredTransform)
+        let size = track!.naturalSize.applying(track!.preferredTransform)
         
         let width = abs(size.width)
         let height = abs(size.height)
-        let bitrate = round(track.estimatedDataRate)
+        let bitrate = round(track!.estimatedDataRate)
         
         let dictionary = [
             "path":Utility.excludeFileProtocol(path),
@@ -361,9 +389,9 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
         
 //        self.getStatusUpdate("Start to compress ...", result)
 
-        let videoAsset = AVURLAsset(url: source)
-        guard let videoTrack = videoAsset.tracks(withMediaType: AVMediaType.video).first else {
-            let error = CompressionError(title: "Cannot find video track")
+        let asset = AVURLAsset(url: source)
+        guard let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first else {
+            _ = CompressionError(title: "Cannot find video track")
 //            completion(.onFailure(error))
             self.getStatusUpdate("Cannot find video track", result)
             return Compression()
@@ -381,7 +409,7 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
         let newHeight = tHeight
 
         // Total Frames
-        let durationInSeconds = videoAsset.duration.seconds
+        let durationInSeconds = asset.duration.seconds
         let frameRate = videoTrack.nominalFrameRate
         let totalFrames = ceil(durationInSeconds * Double(frameRate))
 
@@ -405,26 +433,27 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
 
         var videoReader: AVAssetReader!
         do{
-            videoReader = try AVAssetReader(asset: videoAsset)
+            videoReader = try AVAssetReader(asset: asset)
         }
         catch {
-            let compressionError = CompressionError(title: error.localizedDescription)
+            _ = CompressionError(title: error.localizedDescription)
 //            completion(.onFailure(compressionError))
             self.getStatusUpdate("Cannot find video track", result)
         }
 
         videoReader.add(videoReaderOutput)
+        
+        let audioTrack = asset.tracks(withMediaType: AVMediaType.audio).first
         //setup audio writer
         let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil)
         audioWriterInput.expectsMediaDataInRealTime = false
         videoWriter.add(audioWriterInput)
         //setup audio reader
-        let audioTrack = videoAsset.tracks(withMediaType: AVMediaType.audio).first
         var audioReader: AVAssetReader?
         var audioReaderOutput: AVAssetReaderTrackOutput?
         if(audioTrack != nil) {
             audioReaderOutput = AVAssetReaderTrackOutput(track: audioTrack!, outputSettings: nil)
-            audioReader = try! AVAssetReader(asset: videoAsset)
+            audioReader = try! AVAssetReader(asset: asset)
             audioReader?.add(audioReaderOutput!)
         }
         videoWriter.startWriting()
@@ -434,7 +463,7 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
         videoWriter.startSession(atSourceTime: CMTime.zero)
         let processingQueue = DispatchQueue(label: "processingQueue1")
 
-        var isFirstBuffer = true
+//        var isFirstBuffer = true
         videoWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
             while videoWriterInput.isReadyForMoreMediaData {
 
@@ -460,44 +489,37 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin {
                     videoWriterInput.append(sampleBuffer!)
                 } else {
                     videoWriterInput.markAsFinished()
+                    
                     if videoReader.status == .completed {
+                        
+                        //start writing from audio reader
                         if(audioReader != nil){
-                            if(!(audioReader!.status == .reading) || !(audioReader!.status == .completed)){
-                                //start writing from audio reader
-                                audioReader?.startReading()
-                                videoWriter.startSession(atSourceTime: CMTime.zero)
-                                let processingQueue = DispatchQueue(label: "processingQueue2")
 
-                                audioWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
-                                    while audioWriterInput.isReadyForMoreMediaData {
-                                        let sampleBuffer: CMSampleBuffer? = audioReaderOutput?.copyNextSampleBuffer()
-                                        if audioReader?.status == .reading && sampleBuffer != nil {
-                                            if isFirstBuffer {
-                                                let dict = CMTimeCopyAsDictionary(CMTimeMake(value: 1024, timescale: 44100), allocator: kCFAllocatorDefault);
-                                                CMSetAttachment(sampleBuffer as CMAttachmentBearer, key: kCMSampleBufferAttachmentKey_TrimDurationAtStart, value: dict, attachmentMode: kCMAttachmentMode_ShouldNotPropagate);
-                                                isFirstBuffer = false
-                                            }
-                                            audioWriterInput.append(sampleBuffer!)
-                                        } else {
-                                            audioWriterInput.markAsFinished()
-
-                                            videoWriter.finishWriting(completionHandler: {() -> Void in
-//                                                completion(.onSuccess(destination))
-                                                self.getMediaInfo(destination.absoluteString, result)
-                                            })
-
-                                        }
+                            audioReader!.startReading()
+                            videoWriter.startSession(atSourceTime: CMTime.zero)
+                            let processingQueue = DispatchQueue(label: "processingQueue2")
+                            
+                            audioWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
+                                while audioWriterInput.isReadyForMoreMediaData {
+                                    let sampleBuffer:CMSampleBuffer? = audioReaderOutput!.copyNextSampleBuffer()
+                                    if audioReader!.status == .reading && sampleBuffer != nil {
+                                        audioWriterInput.append(sampleBuffer!)
                                     }
-                                })
-                            }
-                        } else {
-                            videoWriter.finishWriting(completionHandler: {() -> Void in
-//                                completion(.onSuccess(destination))
-                                self.getMediaInfo(destination.absoluteString, result)
+                                    else {
+                                        audioWriterInput.markAsFinished()
+                                        
+                                        if audioReader?.status == .completed {
+                                           videoWriter.finishWriting(completionHandler: {() -> Void in
+                                               self.getMediaInfo(destination.absoluteString, result)
+                                           })
+                                       }
+                                    }
+                                }
                             })
                         }
                     }
                 }
+                
             }
         })
         

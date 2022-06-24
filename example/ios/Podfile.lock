@@ -90,7 +90,7 @@ SPEC CHECKSUMS:
   open_file: 02eb5cb6b21264bd3a696876f5afbfb7ca4f4b7d
   SDWebImage: 0905f1b7760fc8ac4198cae0036600d67478751e
   SwiftyGif: 6c3eafd0ce693cad58bb63d2b2fb9bacb8552780
-  video_compressor: 92f6e083c077304509922c3bc265ffb4bf4973ec
+  video_compressor: d5734149463a874b3b144df1ba16768642ac1430
   video_meta_info: 17cf2f1d6ba30125336dec364eac12552b0a4429
   video_player_avfoundation: e489aac24ef5cf7af82702979ed16f2a5ef84cff
 
