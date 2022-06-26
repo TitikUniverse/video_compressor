@@ -113,14 +113,22 @@ class _MyHomePageState extends State<MyHomePage> {
       // _duration = duration.inSeconds;
 
       if (info != null) {
-        setState(() {
-          _tips = "压缩成功！";
-          _name = a.title!;
-          _duration = (a.duration!/1000).round();
-          _compRate = 100 - (info.filesize! / a.filesize! * 100).round();
-          _sizeChange = "原视频大小：${(a.filesize!/(1024*1024)).round()} MB；压缩后大小：${(info.filesize!/(1024*1024)).round()} MB";
-          _compressedFile = info.path!;
-        });
+
+        if (info.status != null) {
+          setState(() {
+            _tips = "压缩失败，请使用原始视频上传！";
+            _compressedFile = info.status!;
+          });
+        } else {
+          setState(() {
+            _tips = "压缩成功！";
+            _name = a.title!;
+            _duration = (a.duration!/1000).round();
+            _compRate = 100 - (info.filesize! / a.filesize! * 100).round();
+            _sizeChange = "原视频大小：${(a.filesize!/(1024*1024)).round()} MB；压缩后大小：${(info.filesize!/(1024*1024)).round()} MB";
+            _compressedFile = info.path!;
+          });
+        }
       }
     } else {
       setState(() {

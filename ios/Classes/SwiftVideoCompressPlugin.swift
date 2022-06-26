@@ -160,25 +160,27 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         }
     }
     
-    public func getMediaInfoJson(_ path: String)->[String : Any?] {
+    public func getMediaInfoJson(_ path: String) throws ->[String : Any?] {
         let url = Utility.getPathUrl(path)
         let asset = avController.getVideoAsset(url)
 //        guard let track = avController.getTrack(asset) else { return [:] }
 //        let track = asset.tracks(withMediaType: AVMediaType.video).first!
         
         var track : AVAssetTrack? = nil
-        let group = DispatchGroup()
-        group.enter()
-        asset.loadValuesAsynchronously(forKeys: ["tracks"], completionHandler: {
-            var error: NSError? = nil;
-            let status = asset.statusOfValue(forKey: "tracks", error: &error)
-            if (status == .loaded) {
-                track = asset.tracks(withMediaType: AVMediaType.video).first
-            }
-            group.leave()
-        })
-        group.wait()
-//        guard let track = asset.tracks(withMediaType: .video).first else { fatalError() }
+//        let group = DispatchGroup()
+//        group.enter()
+//        asset.loadValuesAsynchronously(forKeys: ["tracks"], completionHandler: {
+//            var error: NSError? = nil;
+//            let status = asset.statusOfValue(forKey: "tracks", error: &error)
+//            if (status == .loaded) {
+//                track = asset.tracks(withMediaType: AVMediaType.video).first
+//            }
+//            group.leave()
+//        })
+//        group.wait()
+        guard let track = asset.tracks(withMediaType: .video).first else {
+            throw ErrorException.FileNotFound
+        }
         
         let playerItem = AVPlayerItem(url: url)
         let metadataAsset = playerItem.asset
@@ -189,13 +191,13 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         let author = avController.getMetaDataByTag(metadataAsset,key: "author")
         
         let duration = asset.duration.seconds * 1000
-        let filesize = track?.totalSampleDataLength
+        let filesize = track.totalSampleDataLength
         
-        let size = track!.naturalSize.applying(track!.preferredTransform)
+        let size = track.naturalSize.applying(track.preferredTransform)
         
         let width = abs(size.width)
         let height = abs(size.height)
-        let bitrate = round(track!.estimatedDataRate)
+        let bitrate = round(track.estimatedDataRate)
         
         let dictionary = [
             "path":Utility.excludeFileProtocol(path),
@@ -212,14 +214,21 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
     }
     
     private func getMediaInfo(_ path: String,_ result: FlutterResult) {
-        let json = getMediaInfoJson(path)
-        let string = Utility.keyValueToJson(json)
-        result(string)
+        do{
+            let json = try getMediaInfoJson(path)
+            let string = Utility.keyValueToJson(json)
+            result(string)
+        }
+        catch{
+            let json = statusUpdateJson("failed")
+            let string = Utility.keyValueToJson(json)
+            result(string)
+        }
     }
     
     private func statusUpdateJson(_ status: String)->[String : Any?]{
         let dictionary = [
-            "Status": status
+            "status": status
             ] as [String : Any?]
         return dictionary
     }
@@ -260,87 +269,8 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
             return sourceVideoTrack.asset!
         }
         
-        return composition    
+        return composition
     }
-    
-    // Deprecated
-    private func compressVideo(_ path: String,_ quality: NSNumber,_ bRate: Int?,_ deleteOrigin: Bool,_ startTime: Double?,
-                               _ duration: Double?,_ includeAudio: Bool?,_ frameRate: Int?,
-                               _ result: @escaping FlutterResult) {
-        let sourceVideoUrl = Utility.getPathUrl(path)
-        let sourceVideoType = "mp4"
-        
-        let sourceVideoAsset = avController.getVideoAsset(sourceVideoUrl)
-        let sourceVideoTrack = avController.getTrack(sourceVideoAsset)
-        
-        let compressionUrl =
-            Utility.getPathUrl("\(Utility.basePath())/\(Utility.getFileName(path)).\(sourceVideoType)")
-        
-        let timescale = sourceVideoAsset.duration.timescale
-        let minStartTime = Double(startTime ?? 0)
-        
-        let videoDuration = sourceVideoAsset.duration.seconds
-        let minDuration = Double(duration ?? videoDuration)
-        let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
-        
-        let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
-        let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
-        let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: cmDurationTime)
-        
-        let isIncludeAudio = includeAudio != nil ? includeAudio! : true
-        
-        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!)
-        
-        let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
-        
-        exporter.outputURL = compressionUrl
-        exporter.outputFileType = AVFileType.mp4
-        exporter.shouldOptimizeForNetworkUse = true
-        
-        if frameRate != nil {
-            let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)
-            videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate!))
-            exporter.videoComposition = videoComposition
-        }
-        
-        if !isIncludeAudio {
-            exporter.timeRange = timeRange
-        }
-        
-        Utility.deleteFile(compressionUrl.absoluteString)
-        
-        let timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.updateProgress),
-                                         userInfo: exporter, repeats: true)
-        
-        exporter.exportAsynchronously(completionHandler: {
-            timer.invalidate()
-            if(self.stopCommand) {
-                self.stopCommand = false
-                var json = self.getMediaInfoJson(path)
-                json["isCancel"] = true
-                let jsonString = Utility.keyValueToJson(json)
-                return result(jsonString)
-            }
-            if deleteOrigin {
-                let fileManager = FileManager.default
-                do {
-                    if fileManager.fileExists(atPath: path) {
-                        try fileManager.removeItem(atPath: path)
-                    }
-                    self.exporter = nil
-                    self.stopCommand = false
-                }
-                catch let error as NSError {
-                    print(error)
-                }
-            }
-            var json = self.getMediaInfoJson(compressionUrl.absoluteString)
-            json["isCancel"] = false
-            let jsonString = Utility.keyValueToJson(json)
-            result(jsonString)
-        })
-    }
-
     
     func checkFileSize(sizeUrl: URL, message:String){
         let data = NSData(contentsOf: sizeUrl)!
@@ -422,7 +352,7 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         videoWriterInput.expectsMediaDataInRealTime = true
         videoWriterInput.transform = videoTrack.preferredTransform
 
-        let videoWriter = try! AVAssetWriter(outputURL: destination, fileType: AVFileType.mov)
+        let videoWriter = try! AVAssetWriter(outputURL: destination, fileType: AVFileType.mp4)
         videoWriter.add(videoWriterInput)
 
         // Setup video reader output
@@ -445,17 +375,43 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         
         let audioTrack = asset.tracks(withMediaType: AVMediaType.audio).first
         //setup audio writer
-        let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil)
+//        let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil)
+//        audioWriterInput.expectsMediaDataInRealTime = false
+//        videoWriter.add(audioWriterInput)
+//        //setup audio reader
+//        var audioReader: AVAssetReader?
+//        var audioReaderOutput: AVAssetReaderTrackOutput?
+//        if(audioTrack != nil) {
+//            audioReaderOutput = AVAssetReaderTrackOutput(track: audioTrack!, outputSettings: nil)
+//            audioReader = try! AVAssetReader(asset: asset)
+//            audioReader?.add(audioReaderOutput!)
+//        }
+        //setup audio writer
+        //let formatDesc = CMSampleBufferGetFormatDescription(anAudioSampleBuffer) // this is giving me error here of un initilize, which I didn't I know.
+        //let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil, sourceFormatHint: formatDesc)
+//        let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil)
+        let audioWriterInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: nil, sourceFormatHint: audioTrack!.formatDescriptions[0] as! CMFormatDescription)
         audioWriterInput.expectsMediaDataInRealTime = false
         videoWriter.add(audioWriterInput)
         //setup audio reader
-        var audioReader: AVAssetReader?
-        var audioReaderOutput: AVAssetReaderTrackOutput?
-        if(audioTrack != nil) {
-            audioReaderOutput = AVAssetReaderTrackOutput(track: audioTrack!, outputSettings: nil)
-            audioReader = try! AVAssetReader(asset: asset)
-            audioReader?.add(audioReaderOutput!)
+//        let audioTrack = asset.tracks(withMediaType: AVMediaType.audio)[0]
+        let audioReaderOutput = AVAssetReaderTrackOutput(track: audioTrack!, outputSettings: nil)
+        
+        var audioReader: AVAssetReader!
+        do{
+            audioReader = try AVAssetReader(asset: asset)
         }
+        catch {
+            _ = CompressionError(title: error.localizedDescription)
+//            completion(.onFailure(compressionError))
+            self.getStatusUpdate("Cannot find audio track", result)
+        }
+        audioReader.add(audioReaderOutput)
+//        videoWriter.startWriting()
+        
+        
+        
+        
         videoWriter.startWriting()
 
         //start writing from video reader
@@ -463,7 +419,9 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         videoWriter.startSession(atSourceTime: CMTime.zero)
         let processingQueue = DispatchQueue(label: "processingQueue1")
 
-//        var isFirstBuffer = true
+        var isFirstBuffer = true
+        var isAudioSaved = false
+        var isVideoSaved = false
         videoWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
             while videoWriterInput.isReadyForMoreMediaData {
 
@@ -488,45 +446,75 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
                 if videoReader.status == .reading && sampleBuffer != nil {
                     videoWriterInput.append(sampleBuffer!)
                 } else {
+                    
                     videoWriterInput.markAsFinished()
+                    
                     
                     if videoReader.status == .completed {
                         
                         //start writing from audio reader
                         if(audioReader != nil){
 
-                            if(!(audioReader!.status == .reading) || !(audioReader!.status == .completed)){
+                            if(!(audioReader.status == .reading) || !(audioReader.status == .completed)){
                                 
-                                audioReader!.startReading()
-                                videoWriter.startSession(atSourceTime: CMTime.zero)
+                                audioReader.startReading()
+//                                videoWriter.startSession(atSourceTime: CMTime.zero)
                                 let processingQueue = DispatchQueue(label: "processingQueue2")
                                 
                                 audioWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
                                     while audioWriterInput.isReadyForMoreMediaData {
-                                        let sampleBuffer:CMSampleBuffer? = audioReaderOutput!.copyNextSampleBuffer()
-                                        if audioReader!.status == .reading && sampleBuffer != nil {
+                                        let sampleBuffer:CMSampleBuffer? = audioReaderOutput.copyNextSampleBuffer()
+                                        
+                                        if isFirstBuffer {
+                                            videoWriter.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer!))
+                                            isFirstBuffer = false
+                                        }
+                                        
+                                        if audioReader.status == .reading && sampleBuffer != nil {
                                             audioWriterInput.append(sampleBuffer!)
                                         }
                                         else {
-                                            audioWriterInput.markAsFinished()
                                             
-                                            if audioReader?.status == .completed {
-                                               videoWriter.finishWriting(completionHandler: {() -> Void in
-                                                   self.getMediaInfo(destination.absoluteString, result)
-                                               })
-                                           }
+                                            if !isAudioSaved {
+                                                audioWriterInput.markAsFinished()
+                                                isAudioSaved = true
+    //                                            break
+                                                if audioReader.status == .completed {
+                                                   videoWriter.finishWriting(completionHandler: {() -> Void in
+                                                       self.getMediaInfo(destination.absoluteString, result)
+                                                   })
+                                                }
+                                            } else {
+                                                break
+                                            }
                                         }
                                     }
                                 })
                             }
-                        }else {
-                            if videoReader?.status == .completed {
-                               videoWriter.finishWriting(completionHandler: {() -> Void in
-                                   self.getMediaInfo(destination.absoluteString, result)
-                               })
-                           }
+                        } else {
+                            
+                            if !isVideoSaved {
+                                
+                                isVideoSaved = true
+                                
+                                if videoReader?.status == .completed {
+                                   videoWriter.finishWriting(completionHandler: {() -> Void in
+                                       self.getMediaInfo(destination.absoluteString, result)
+                                   })
+                                }
+                                
+                            } else {
+                                break
+                            }
+
                         }
                     }
+                    
+                    
+                    
+                    
+                    
+                    
                 }
                 
             }
@@ -579,6 +567,11 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
         public init() {}
 
         public var cancel = false
+    }
+    
+    // Error types
+    public enum ErrorException: Error {
+        case FileNotFound
     }
 
     // Compression Error Messages
