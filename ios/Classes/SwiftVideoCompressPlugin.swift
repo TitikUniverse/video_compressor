@@ -495,27 +495,36 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
                         //start writing from audio reader
                         if(audioReader != nil){
 
-                            audioReader!.startReading()
-                            videoWriter.startSession(atSourceTime: CMTime.zero)
-                            let processingQueue = DispatchQueue(label: "processingQueue2")
-                            
-                            audioWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
-                                while audioWriterInput.isReadyForMoreMediaData {
-                                    let sampleBuffer:CMSampleBuffer? = audioReaderOutput!.copyNextSampleBuffer()
-                                    if audioReader!.status == .reading && sampleBuffer != nil {
-                                        audioWriterInput.append(sampleBuffer!)
+                            if(!(audioReader!.status == .reading) || !(audioReader!.status == .completed)){
+                                
+                                audioReader!.startReading()
+                                videoWriter.startSession(atSourceTime: CMTime.zero)
+                                let processingQueue = DispatchQueue(label: "processingQueue2")
+                                
+                                audioWriterInput.requestMediaDataWhenReady(on: processingQueue, using: {() -> Void in
+                                    while audioWriterInput.isReadyForMoreMediaData {
+                                        let sampleBuffer:CMSampleBuffer? = audioReaderOutput!.copyNextSampleBuffer()
+                                        if audioReader!.status == .reading && sampleBuffer != nil {
+                                            audioWriterInput.append(sampleBuffer!)
+                                        }
+                                        else {
+                                            audioWriterInput.markAsFinished()
+                                            
+                                            if audioReader?.status == .completed {
+                                               videoWriter.finishWriting(completionHandler: {() -> Void in
+                                                   self.getMediaInfo(destination.absoluteString, result)
+                                               })
+                                           }
+                                        }
                                     }
-                                    else {
-                                        audioWriterInput.markAsFinished()
-                                        
-                                        if audioReader?.status == .completed {
-                                           videoWriter.finishWriting(completionHandler: {() -> Void in
-                                               self.getMediaInfo(destination.absoluteString, result)
-                                           })
-                                       }
-                                    }
-                                }
-                            })
+                                })
+                            }
+                        }else {
+                            if videoReader?.status == .completed {
+                               videoWriter.finishWriting(completionHandler: {() -> Void in
+                                   self.getMediaInfo(destination.absoluteString, result)
+                               })
+                           }
                         }
                     }
                 }
