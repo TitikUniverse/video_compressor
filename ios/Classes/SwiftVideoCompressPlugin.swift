@@ -220,6 +220,7 @@ public class SwiftVideoCompressorPlugin: NSObject, FlutterPlugin, FlutterStreamH
             result(string)
         }
         catch{
+            Utility.deleteFile(path)
             let json = statusUpdateJson("failed")
             let string = Utility.keyValueToJson(json)
             result(string)
