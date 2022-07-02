@@ -18,25 +18,25 @@ class CompressionConfig {
 
     if(mimeType!="video/mp4" && mimeType!="video/mov" && mimeType!="video/quicktime"){
       isCompressionNeeded = false;
-      tips = "暂不支持您所选视频类型";
+      tips = "e01";
       return;
     }
 
     if ( (originDuration / 1000).round() > 302){
       isCompressionNeeded = false;
-      tips = "多鱼App鼓励您将每段视频长度控制在5分钟内";
+      tips = "e02";
       return;
     }
 
     if (originWidth < 360 && originHeight <360){
       isCompressionNeeded = false;
-      tips = "您的视频像素过低，请帮助我们维护平台视频质量。谢谢！";
+      tips = "e03";
       return;
     }
 
     if (originFileSize < 1024 * 1024 * 10){
       isCompressionNeeded = false;
-      tips = "视频小于10MB无需压缩";
+      tips = "e04";
       return;
     }
 
@@ -60,7 +60,7 @@ class CompressionConfig {
         }
       }else {
         isCompressionNeeded = false;
-        tips = "1080x1920像素，大小合适，无需压缩";
+        tips = "e05";
         return;
       }
     } else if ( originWidth < 720 && originHeight < 720 ){
@@ -71,7 +71,7 @@ class CompressionConfig {
         targetHeight = originHeight;
       } else {
         isCompressionNeeded = false;
-        tips = "低画质，大小合适，无需压缩";
+        tips = "e06";
         return;
       }
     } else {
@@ -86,7 +86,7 @@ class CompressionConfig {
         }
       } else {
         isCompressionNeeded = false;
-        tips = "720x1280像素，大小合适，无需压缩";
+        tips = "e07";
         return;
       }
     }

@@ -1,3 +1,11 @@
+## 0.0.5
+
+* Change the feedback of pre-check
+
+## 0.0.4
+
+* Change the minSdkVersion to 28 to be compatible old app
+
 ## 0.0.3
 
 * Remove the failed file from cache folder.

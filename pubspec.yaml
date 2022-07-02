@@ -1,6 +1,6 @@
 name: video_compressor
 description: A flutter plugin used to compress the videos with customized configurations
-version: 0.0.3
+version: 0.0.5
 homepage: https://dstk.online
 repository: https://github.com/DSTKCA/video_compressor
 
